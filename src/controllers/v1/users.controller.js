@@ -7,6 +7,19 @@ import { asyncHandler } from "../../utils/asyncHandler.js";
 
 const prisma = new PrismaClient();
 
+async function checkValidation(email, mobile) {
+  const emailRegex = /^[a-zA-Z0-9._-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,4}$/;
+  const mobileRegex = /^[6-9]\d{9}$/;
+
+  const notValidEmail = emailRegex.test(email);
+  const notValidMobile = mobileRegex.test(mobile);
+
+  return {
+    validateEmail: !notValidEmail,
+    validateMobile: !notValidMobile,
+  };
+}
+
 async function doesUserExist(email, mobile) {
   const userWithEmail = await prisma.user.findUnique({
     where: { email },
@@ -47,7 +60,7 @@ async function generateAccessToken(user) {
 
 // Create user
 const createUser = asyncHandler(async (req, res) => {
-  const { fullName, email, mobile, password } = req.body;
+  const { fullName, email, mobile, password, isAdmin } = req.body;
 
   // Validate input
   if (!fullName || !email || !mobile || !password) {
@@ -70,6 +83,19 @@ const createUser = asyncHandler(async (req, res) => {
           } is required`
         )
       );
+  }
+
+  // Check validations
+  const validate = await checkValidation(email, mobile);
+
+  if (validate.validateEmail) {
+    return res.status(200).json(new ApiError(200, "", "Email ID is not valid"));
+  }
+
+  if (validate.validateMobile) {
+    return res
+      .status(200)
+      .json(new ApiError(200, "", "Mobile Number is not valid"));
   }
 
   // Check if the user with the same email already exists
@@ -96,6 +122,7 @@ const createUser = asyncHandler(async (req, res) => {
       email,
       mobile,
       password: hashedPassword,
+      isAdmin: isAdmin,
     },
   });
 
@@ -103,9 +130,9 @@ const createUser = asyncHandler(async (req, res) => {
   //     "-password -refreshToken"
   //   );
 
-  //   if (!createdUser) {
-  //     throw new ApiError(500, "Something went wrong while registering the user");
-  //   }
+  if (!newUser) {
+    throw new ApiError(500, "Something went wrong while registering the user");
+  }
 
   return res
     .status(201)
